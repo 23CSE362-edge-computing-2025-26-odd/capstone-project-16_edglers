@@ -1,0 +1,91 @@
+Federated Learning System for Pest Detection Drones
+
+Implementation Guide
+
+Author: Gemini
+Date: September 11, 2025
+Location: Ettimadai, Tamil Nadu, India
+1. Introduction
+
+This document outlines the methodology and provides the implementation code for creating a distributed machine learning system for a fleet of pest-detection drones. The core challenge is to enable individual drones, each equipped with a MobileNetV2-based CNN model, to learn from their unique field experiences and then collectively contribute these learnings to create a superior, globally shared model.
+
+This is achieved using Federated Learning (FL), a decentralized machine learning approach that trains an algorithm across multiple edge devices without exchanging the raw data itself.
+
+The proposed architecture consists of:
+
+    Drone Clients: Each drone runs an optimized inference model to detect pests. It collects new, human-verified image data, periodically retrains its local model, and uploads only the model weight updates.
+
+    Cloud Server: A central server that collects these weight updates from all drones. Once a month, it intelligently aggregates them using the Federated Averaging (FedAvg) algorithm to produce a new, improved global model.
+
+This approach ensures data privacy (crop images never leave the drone), reduces communication bandwidth, and allows the global model to continuously improve by learning from a diverse set of real-world conditions encountered by the entire fleet.
+2. System Architecture & Workflow
+
+The system operates in a continuous, cyclical fashion.
+
+    Distribution: The cloud server provides the latest global model weights. Each drone in the fleet downloads these weights to initialize or update its local model.
+
+    Inference & Data Collection: The drone uses a highly optimized TensorFlow Lite (TFLite) version of the model for fast, low-power pest detection during its flights. When it captures images of pests, these are stored locally. A "human-in-the-loop" process (e.g., a farmer's confirmation via a simple app) is required to accurately label this new data.
+
+    Local Training (Self-Evolution): Periodically (e.g., daily, while charging), the drone uses its newly collected, labeled dataset to fine-tune its local Keras model for a few epochs. This step allows the drone to adapt to its specific environment.
+
+    Update Communication: After local training, the drone uploads its updated model weights (not the images) to the central cloud server. It also sends metadata, such as the number of new images used for training.
+
+    Cloud Aggregation: Once a month, the server runs the Federated Averaging script. It calculates a weighted average of all the received drone model updates, with updates from drones that trained on more data having a slightly higher influence. This produces a new, improved global model. The cycle then repeats.
+
+3. Implementation and Code
+
+The implementation is divided into three main parts: the drone client logic, the server for receiving updates, and the server-side aggregator script.
+Phase 1: Model Preparation
+
+First, the trained .keras model must be converted to a .tflite model for efficient inference on the drone. The full .keras model's weights will be used for the local retraining process.
+Phase 2: Drone Client (drone_client.py)
+
+This Python script contains all the logic that runs on the drone. It simulates the core functions:
+
+    Re-creating the model architecture to load weights.
+
+    Performing local training on a new batch of data.
+
+    Communicating the updated weights to the server.
+
+Phase 3: Cloud Server (server.py)
+
+A lightweight Flask web server acts as the API endpoint. Its sole job is to receive the .h5 weight files and associated metadata from the drones and save them for the monthly aggregation.
+Phase 4: Aggregation Script (aggregator.py)
+
+This script is run manually on the server once a month. It iterates through all the saved drone updates, performs the Federated Averaging calculation, and saves the resulting new global model.
+4. Deployment and Operation
+
+    Initial Setup:
+
+        The pest_detection_model_fine_tuned.keras model is placed on the server and named global_model_initial.h5.
+
+        Each drone is deployed with the drone_client.py script and the initial global model weights.
+
+        The server.py application is started on the cloud server.
+
+    Monthly Operation:
+
+        Drones download the latest global model from the server.
+
+        Throughout the month, drones perform their duties, collect data, and run their local training function to upload weight updates to the server.
+
+        The server automatically collects and stores these updates in a dedicated folder.
+
+    End-of-Month Aggregation:
+
+        The aggregator.py script is executed on the server.
+
+        This script creates a new, improved global model (e.g., global_model_month_10.h5). This new model becomes the source for the next cycle.
+
+5. Conclusion and Next Steps
+
+This implementation provides a complete, functional foundation for a federated learning system. The provided code demonstrates the core mechanics of local training, communication, and server-side aggregation.
+
+For a production system, consider these enhancements:
+
+    Implement FedProx: To better handle the non-IID nature of the data from different farms, modify the local training loss function to include a proximal term, which stabilizes training.
+
+    Security: Implement secure communication (HTTPS) between the drones and the server.
+
+    Robustness: Add more error handling for network failures and ensure the system can recover gracefully.
